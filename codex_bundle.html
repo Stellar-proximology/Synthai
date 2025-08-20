@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Codex Instructions — Stellar Proximology × YOU-N-I-VERSE</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { --bg:#0b0f14; --panel:#0f1422; --ink:#e6eefb; --muted:#2b3550; --hi:#7bcfff; }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto}
+  header{padding:18px 20px;border-bottom:1px solid var(--muted);display:flex;gap:12px;align-items:center}
+  h1{font-size:18px;margin:0}
+  main{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
+  .card{background:var(--panel);border:1px solid var(--muted);border-radius:16px;padding:16px;display:flex;flex-direction:column}
+  textarea{width:100%;height:60vh;background:#0a0f1a;color:var(--ink);border:1px solid var(--muted);border-radius:12px;padding:12px;resize:vertical}
+  .row{display:flex;gap:8px;align-items:center;margin-top:12px}
+  button{border:1px solid var(--muted);background:#0b1220;color:var(--ink);padding:10px 14px;border-radius:12px;cursor:pointer}
+  button:hover{border-color:var(--hi)}
+  .tag{font-size:12px;padding:2px 8px;border:1px solid var(--muted);border-radius:999px;background:#0b1220}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Codex Instructions Bundle</h1>
+    <span class="tag">Stellar Proximology</span>
+    <span class="tag">YOU-N-I-VERSE</span>
+    <div style="flex:1"></div>
+    <button id="downloadZip">Download ZIP backup</button>
+  </header>
+
+  <main>
+    <section class="card">
+      <h3 style="margin:0 0 8px">stellarproximology/codex-instructions.md</h3>
+      <textarea id="stellar"></textarea>
+      <div class="row mono">Path: <code>stellarproximology/codex-instructions.md</code></div>
+    </section>
+
+    <section class="card">
+      <h3 style="margin:0 0 8px">you-n-i-verse/codex-instructions.md</h3>
+      <textarea id="youniverse"></textarea>
+      <div class="row mono">Path: <code>you-n-i-verse/codex-instructions.md</code></div>
+    </section>
+  </main>
+
+<script>
+const stellar = `# 🌌 Codex Build Contract — Stellar Proximology (Research Lab)
+
+**Prime directive:** This repo is the **scientific backbone**. It publishes falsifiable experiments, replication kits, and structured results. It never forks logic that belongs in \`/core\`.
+
+## Scope (What belongs here)
+- Reproducible experiments (Bible/I Ching/Human Design/Astro × physics/field theory)
+- Replication kits (datasets, small scripts, notebooks)
+- Methods, protocols, results pages
+- Thin API endpoints that expose published results (read-only where possible)
+
+## Out of scope (What does NOT belong here)
+- Game UI/UX, quests, town sim logic (goes to **YOU-N-I-VERSE**)
+- Collapse/sentence engines and shared models (**/core**)
+- Heavy front-end frameworks; this site is static-first
+
+## Architecture & Directories
+/core
+/experiments
+/replication-kits
+/site
+/api
+
+### Experiment Template
+index.md • protocol.json • run.py/ipynb • data/ • kit/
+
+## Shared Core Integration
+- Import Trinity/Pentacore math, Codon↔Hexagram↔Element, sentence/collapse engines from /core
+- Never duplicate /core
+
+### Install
+git submodule add <core-repo-url> core
+git submodule update --init --recursive
+# or: pip install youniverse-core
+
+## API (optional)
+GET /api/experiments
+GET /api/experiments/:slug
+GET /api/replication-kits/:slug
+
+## CI/CD
+- Validate protocols, deterministic runs, build static site, publish kit artifacts
+
+## DoD
+- Schema pass • Repro run • Site renders • Kit downloadable • /core pinned
+
+## Quick Start
+npm i
+git submodule update --init --recursive
+npm run dev
+npm run validate:protocols
+`;
+
+const youni = `# 🎮 Codex Build Contract — YOU-N-I-VERSE (Game Platform)
+
+**Prime directive:** This repo is the **playground**. It renders lab science as lived experience. All domain math/logic lives in **/core**.
+
+## Scope
+- React/Tailwind/shadcn UI
+- Chart + avatar (Body/Tropical, Heart/Draconic, Mind/Sidereal)
+- Sentence & collapse UI using /core
+- Game loops: quests, fragments, town builder
+
+## Out of scope
+- Publishing research • Forcing /core changes
+
+## Architecture
+/core
+/app
+/components
+/lib
+/data
+/state
+
+## Shared Core
+import { collapse, toSentence, mapChartToCTB } from "@/core/engine"
+import { hexCodonElementMap } from "@/core/mappings"
+
+### Install
+git submodule add <core-repo-url> core
+git submodule update --init --recursive
+# or: npm i youniverse-core
+
+## Inputs
+- Swiss Ephemeris → Gates/Lines/CTB
+- Stellar API for published parameters (read-only)
+
+## Phases
+1) Core Field
+2) Resonance Lab
+3) Town Builder
+
+## UX Standards
+- Mobile-first, shadcn, local Backup (ZIP), accessibility guards
+
+## DoD
+- Screens wired • Sentence→Quest loop with /core • Backup works • Playwright smoke
+
+## Quick Start
+npm i
+git submodule update --init --recursive
+npm run dev
+`;
+
+document.getElementById('stellar').value = stellar;
+document.getElementById('youniverse').value = youni;
+
+// ZIP maker (client-side)
+async function makeZip(files){
+  // Tiny zip from scratch (no deps). Store as uncompressed for simplicity.
+  // Minimal ZIP writer (no compression) — CRC32 implementation included.
+  function crc32(arr){
+    let c = ~0>>>0;
+    for (let i=0;i<arr.length;i++){
+      c ^= arr[i];
+      for (let k=0;k<8;k++) c = (c>>>1) ^ (0xEDB88320 & -(c & 1));
+    }
+    return ~c>>>0;
+  }
+  const encoder = new TextEncoder();
+  const fileRecords = [];
+  let offset = 0;
+  const chunks = [];
+
+  function pushU32(n){ const b=new Uint8Array(4); new DataView(b.buffer).setUint32(0,n,true); chunks.push(b); offset+=4; }
+  function pushU16(n){ const b=new Uint8Array(2); new DataView(b.buffer).setUint16(0,n,true); chunks.push(b); offset+=2; }
+  function pushBytes(b){ chunks.push(b); offset+=b.length; }
+
+  // Local file headers + data
+  for (const {name, content} of files){
+    const data = encoder.encode(content);
+    const csum = crc32(data);
+    const nameBytes = encoder.encode(name);
+    // Local file header
+    pushU32(0x04034b50);
+    pushU16(20);           // version needed
+    pushU16(0);            // flags
+    pushU16(0);            // method: store
+    pushU16(0); pushU16(0);// time/date (zero)
+    pushU32(csum);         // CRC32
+    pushU32(data.length);  // comp size
+    pushU32(data.length);  // uncomp size
+    pushU16(nameBytes.length);
+    pushU16(0);            // extra len
+    pushBytes(nameBytes);
+    pushBytes(data);
+    fileRecords.push({nameBytes, dataLen:data.length, csum, localOffset: offset - (30 + nameBytes.length + data.length)});
+  }
+
+  const centralStart = offset;
+
+  // Central directory
+  for (const fr of fileRecords){
+    pushU32(0x02014b50);
+    pushU16(20); pushU16(20); // version made/needed
+    pushU16(0);               // flags
+    pushU16(0);               // method
+    pushU16(0); pushU16(0);   // time/date
+    pushU32(fr.csum);
+    pushU32(fr.dataLen);
+    pushU32(fr.dataLen);
+    pushU16(fr.nameBytes.length);
+    pushU16(0); pushU16(0);   // extra/comment
+    pushU16(0); pushU16(0);   // disk/start
+    pushU32(0);               // attr
+    pushU32(fr.localOffset);  // local header offset
+    pushBytes(fr.nameBytes);
+  }
+
+  const centralEnd = offset;
+  const centralSize = centralEnd - centralStart;
+
+  // End of central directory
+  pushU32(0x06054b50);
+  pushU16(0); pushU16(0);          // disks
+  pushU16(fileRecords.length);
+  pushU16(fileRecords.length);
+  pushU32(centralSize);
+  pushU32(centralStart);
+  pushU16(0);                      // comment
+
+  // Concatenate
+  let total=0; for(const c of chunks) total+=c.length;
+  const out = new Uint8Array(total);
+  let p=0; for(const c of chunks){ out.set(c,p); p+=c.length; }
+
+  return new Blob([out], {type:"application/zip"});
+}
+
+document.getElementById('downloadZip').onclick = async () => {
+  const files = [
+    { name: "stellarproximology/codex-instructions.md", content: document.getElementById('stellar').value },
+    { name: "you-n-i-verse/codex-instructions.md", content: document.getElementById('youniverse').value }
+  ];
+  const blob = await makeZip(files);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "codex-instructions-bundle.zip";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>
