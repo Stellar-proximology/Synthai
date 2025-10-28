@@ -1,0 +1,24 @@
+{
+  "name": "Adaya (preloaded)",
+  "source_charts": [
+    "chart1756755048.pdf",
+    "chart1756754999.pdf",
+    "chart1756755026.pdf",
+    "chart1756755108.pdf"
+  ],
+  "notes": "Preloaded chart PDFs included. For best results, transcribe key chart data into text files and upload them, or paste critical gate/channel/profile info into this profile before running evaluations.",
+  "birth": {
+    "date": "",
+    "time": "",
+    "tz": "America/Los_Angeles",
+    "place": ""
+  },
+  "known_traits": [],
+  "inputs": {
+    "goals": [
+      "tailor evaluator to Adaya's Trinity",
+      "prioritize Mind-overlay synthesis"
+    ],
+    "notes": ""
+  }
+}

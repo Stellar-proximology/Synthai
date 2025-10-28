@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SynthAi — Learn & Ask</title>
+<style>
+  body{font-family:system-ui,Arial;background:#071126;color:#e6eef8;margin:0}
+  header{padding:12px;background:#071827;display:flex;gap:12px;align-items:center}
+  .brand{font-weight:700}
+  main{display:flex;gap:12px;padding:12px}
+  .left{width:380px;background:#071826;padding:10px;border-radius:8px}
+  .chat{flex:1;background:#06101a;padding:12px;border-radius:8px;height:70vh;overflow:auto}
+  .composer{display:flex;gap:8px;margin-top:8px}
+  input,textarea,select{background:#041018;border:1px solid #0b2b35;color:#c8f0ff;padding:8px;border-radius:6px}
+  button{background:#7dd3fc;border:none;padding:8px;border-radius:6px;cursor:pointer}
+  .file{padding:6px;border-radius:6px;background:rgba(255,255,255,.02);margin-bottom:6px;display:flex;justify-content:space-between}
+  .section{margin-top:12px;border-top:1px solid rgba(255,255,255,.05);padding-top:10px}
+  textarea{min-height:120px;width:100%}
+  .small{font-size:12px;color:#a6c0d6}
+  pre{white-space:pre-wrap}
+</style>
+</head>
+<body>
+<header><div class="brand">SynthAi🪷 Learn & Ask</div><div style="margin-left:auto">Local LLM proxy</div></header>
+<main>
+  <div class="left">
+    <h4>Teach (upload)</h4>
+    <input id="files" type="file" multiple />
+    <div style="margin-top:8px">
+      <button id="send">Upload</button>
+      <button id="refresh">Refresh files</button>
+    </div>
+
+    <div class="section">
+      <h4>Library</h4>
+      <div id="lib"></div>
+      <div class="small">Files live in <code>knowledge/</code>.</div>
+      <div style="margin-top:8px">
+        <button id="learn">Learn / Build Index</button>
+      </div>
+      <div class="small">Builds a local TF‑IDF index so Synthia retrieves relevant chunks — no cloud needed.</div>
+    </div>
+
+    <div class="section">
+      <h4>Profile Evaluator</h4>
+      <textarea id="profile" placeholder='{"name":"Adaya","birth":{"date":"1995-01-01","time":"08:52","tz":"America/Los_Angeles","place":"City, Country"},"inputs":{"notes":"...","traits":["..."]}}'></textarea>
+      <input id="objectives" placeholder="Comma-separated objectives (e.g., synthesis, recommendations)" />
+      <div style="margin-top:8px"><select id="modeSelectEval"><option value="normal">Normal</option><option value="think">Think-mini</option></select> <button id="eval">Evaluate</button></div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column">
+    <div class="chat" id="chat"></div>
+    <div class="composer">
+      <input id="query" placeholder="Ask from learned corpus (e.g., Explain gate activations for type X)..." style="flex:1" />
+      <select id="modeSelect"><option value="normal">Normal</option><option value="think">Think-mini</option></select> <button id="ask">Ask</button>
+    </div>
+    <div class="section">
+      <h4>Retrieved Chunks (debug)</h4>
+      <pre id="retrieved"></pre>
+    </div>
+  </div>
+</main>
+
+<script>
+async function api(path, opts){ const r = await fetch(path, opts); return r.json(); }
+function write(msg){ const d = document.getElementById('chat'); const el = document.createElement('div'); el.textContent = msg; el.style.padding='8px'; el.style.marginBottom='6px'; el.style.background='rgba(255,255,255,0.02)'; d.appendChild(el); d.scrollTop = d.scrollHeight; }
+
+document.getElementById('send').onclick = async ()=>{
+  const input = document.getElementById('files');
+  if(!input.files.length) return alert('Pick files');
+  const fd = new FormData();
+  for(const f of input.files) fd.append('files', f);
+  write('Uploading files...');
+  const res = await fetch('/api/ingest', { method: 'POST', body: fd });
+  const j = await res.json();
+  write(JSON.stringify(j));
+  loadFiles();
+};
+
+async function loadFiles(){
+  const j = await api('/api/files');
+  const lib = document.getElementById('lib');
+  lib.innerHTML = '';
+  if(j.ok){
+    j.files.forEach(f=>{
+      const div = document.createElement('div');
+      div.className='file';
+      div.textContent = f;
+      lib.appendChild(div);
+    });
+  }
+}
+document.getElementById('refresh').onclick = loadFiles;
+
+document.getElementById('learn').onclick = async ()=>{
+  write('Building local index...');
+  const j = await api('/api/learn', { method:'POST' });
+  write(JSON.stringify(j));
+};
+
+document.getElementById('ask').onclick = async ()=>{
+  const q = document.getElementById('query').value.trim();
+  if(!q) return;
+  write('Q: ' + q);
+  const mode = document.getElementById('modeSelect')?.value || 'normal';
+  const j = await api('/api/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ query: q, mode }) });
+  if(j.ok){
+    write('A: ' + j.output);
+    document.getElementById('retrieved').textContent = JSON.stringify(j.retrieved, null, 2);
+  } else {
+    write('ERR: ' + JSON.stringify(j));
+  }
+};
+
+document.getElementById('eval').onclick = async ()=>{
+  try{
+    const profile = JSON.parse(document.getElementById('profile').value || '{}');
+    const objectives = (document.getElementById('objectives').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+    write('Evaluating profile...');
+    const j = await api('/api/profile/evaluate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ profile, objectives }) });
+    if(j.ok){ write(j.report); } else { write('ERR: ' + JSON.stringify(j)); }
+  }catch(e){ alert('Profile JSON invalid: ' + e.message); }
+};
+
+loadFiles();
+</script>
+
+<script>
+// Auto-load preloaded profile.json into the Profile Evaluator textarea if present
+async function loadPreloadedProfile(){
+  try{
+    const r = await fetch('/profile.json');
+    if(!r.ok) return;
+    const j = await r.json();
+    const ta = document.getElementById('profile');
+    if(ta && (!ta.value || ta.value.trim()==='')) ta.value = JSON.stringify(j, null, 2);
+  }catch(e){ console.log('No preloaded profile', e); }
+}
+window.addEventListener('load', ()=>{ try{ loadPreloadedProfile(); }catch(e){} });
+</script>
+</body>
+</html>

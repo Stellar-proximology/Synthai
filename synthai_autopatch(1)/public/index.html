@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SynthAi — AutoPatch</title>
+<style>
+  body{font-family:system-ui,Arial;background:#071126;color:#e6eef8;margin:0}
+  header{padding:12px;background:#071827;display:flex;gap:12px;align-items:center}
+  .brand{font-weight:700}
+  main{display:flex;gap:12px;padding:12px}
+  .left{width:380px;background:#071826;padding:10px;border-radius:8px}
+  .chat{flex:1;background:#06101a;padding:12px;border-radius:8px;height:70vh;overflow:auto}
+  .composer{display:flex;gap:8px;margin-top:8px}
+  input,textarea,select{background:#041018;border:1px solid #0b2b35;color:#c8f0ff;padding:8px;border-radius:6px}
+  button{background:#7dd3fc;border:none;padding:8px;border-radius:6px;cursor:pointer}
+  .file{padding:6px;border-radius:6px;background:rgba(255,255,255,.02);margin-bottom:6px;display:flex;justify-content:space-between}
+  .section{margin-top:12px;border-top:1px solid rgba(255,255,255,.05);padding-top:10px}
+  textarea{min-height:120px;width:100%}
+  .patch-item{padding:8px;background:rgba(255,255,255,.02);border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  small{color:#97b3c9}
+</style>
+</head>
+<body>
+<header><div class="brand">SynthAi🪷 AutoPatch</div><div style="margin-left:auto">Local LLM proxy</div></header>
+<main>
+  <div class="left">
+    <h4>Teach (upload)</h4>
+    <input id="files" type="file" multiple />
+    <div style="margin-top:8px">
+      <button id="send">Upload</button>
+      <button id="refresh">Refresh files</button>
+    </div>
+
+    <div class="section">
+      <h4>Library</h4>
+      <div id="lib"></div>
+      <small>Files in <code>knowledge/</code> are searchable context.</small>
+    </div>
+
+    <div class="section">
+      <h4>Auto-Patch (LLM)</h4>
+      <select id="autoTarget" style="width:100%"><option value="server.js">server.js</option></select>
+      <div style="margin-top:8px"><textarea id="autoInstruction" placeholder="Describe the change. Example: 'Add GET /api/hello that returns {ok:true}'"></textarea></div>
+      <div style="margin-top:8px">
+        <label><input id="autoApply" type="checkbox" /> Apply automatically</label>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button id="runAutoPatch">Run Auto-Patch</button>
+      </div>
+      <small>Model: <code>TinyLlama</code> via Ollama at <code>http://localhost:11434</code>. Change with <code>MODEL</code> or <code>OLLAMA_URL</code> env.</small>
+    </div>
+
+    <div class="section">
+      <h4>Pending Patches</h4>
+      <div id="patchList"></div>
+    </div>
+
+    <div class="section">
+      <button id="backup">Run backup.sh</button>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column">
+    <div class="chat" id="chat"></div>
+    <div class="composer">
+      <input id="prompt" placeholder="Ask Synthia..." style="flex:1" />
+      <select id="ctx"><option value="">--context--</option></select>
+      <button id="ask">Ask</button>
+    </div>
+  </div>
+</main>
+
+<script>
+async function api(path, opts){ const r = await fetch(path, opts); return r.json(); }
+function write(msg, who='bot'){ const d = document.getElementById('chat'); const el = document.createElement('div'); el.textContent = (who==='user'? 'YOU: ':'SYNTH: ') + msg; el.style.padding='8px'; el.style.marginBottom='6px'; el.style.background = who==='user' ? 'linear-gradient(90deg,#7dd3fc,#60a5fa)' : 'rgba(255,255,255,0.02)'; d.appendChild(el); d.scrollTop = d.scrollHeight; }
+
+document.getElementById('send').onclick = async ()=>{
+  const input = document.getElementById('files');
+  if(!input.files.length) return alert('Pick files');
+  const fd = new FormData();
+  for(const f of input.files) fd.append('files', f);
+  write('Uploading files...', 'user');
+  const res = await fetch('/api/ingest', { method: 'POST', body: fd });
+  const j = await res.json();
+  write(JSON.stringify(j));
+  loadFiles();
+};
+
+async function loadFiles(){
+  const j = await api('/api/files');
+  const lib = document.getElementById('lib');
+  const ctx = document.getElementById('ctx');
+  const autoTarget = document.getElementById('autoTarget');
+  lib.innerHTML = ''; ctx.innerHTML = '<option value="">--context--</option>';
+  // default target options
+  autoTarget.innerHTML = `<option value="server.js">server.js</option><option value="public/index.html">public/index.html</option>`;
+  if(j.ok){
+    j.files.forEach(f=>{
+      const div = document.createElement('div');
+      div.className='file';
+      div.innerHTML = `<span>${f}</span><button data-f="${f}">Attach</button>`;
+      lib.appendChild(div);
+      const opt = document.createElement('option'); opt.value=f; opt.textContent=f; ctx.appendChild(opt);
+      const opt2 = document.createElement('option'); opt2.value=f; opt2.textContent=f; autoTarget.appendChild(opt2);
+    });
+  }
+  loadPatches();
+}
+document.getElementById('refresh').onclick = loadFiles;
+
+document.getElementById('ask').onclick = async ()=>{
+  const p = document.getElementById('prompt').value.trim();
+  const ctxFile = document.getElementById('ctx').value;
+  if(!p) return;
+  write(p, 'user');
+  let context = '';
+  if(ctxFile){
+    const base = ctxFile.startsWith('knowledge/') ? ctxFile.replace('knowledge/','') : ctxFile;
+    const r = await fetch('/api/run', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cmd: 'read', args: [base] }) });
+    const json = await r.json();
+    context = json.content || '';
+  }
+  const res = await fetch('/api/generate', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt: p, context }) });
+  const out = await res.json();
+  if(out.ok) write(out.output); else write('ERR: '+JSON.stringify(out));
+};
+
+document.getElementById('backup').onclick = async ()=>{
+  write('Running backup...', 'user');
+  const r = await fetch('/api/run', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cmd:'bash', args:['./backup.sh'] }) });
+  const j = await r.json();
+  write(JSON.stringify(j));
+};
+
+document.getElementById('runAutoPatch').onclick = async ()=>{
+  const target = document.getElementById('autoTarget').value;
+  const instruction = document.getElementById('autoInstruction').value.trim();
+  const apply = document.getElementById('autoApply').checked;
+  if(!target) return alert('Choose target file');
+  if(!instruction) return alert('Describe the change');
+  write(`Auto-Patching ${target} → "${instruction}"`, 'user');
+  const res = await fetch('/api/patch/auto', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ target, instruction, contextFiles: [], apply })
+  });
+  const j = await res.json();
+  if(j.ok){
+    write(`AutoPatch ${apply?'applied':'created'}: ${j.id}\nPreview:\n${j.preview}`);
+    loadPatches(); loadFiles();
+  }else{
+    write('ERR: ' + JSON.stringify(j));
+  }
+};
+
+async function loadPatches(){
+  const j = await api('/api/patch/list');
+  const el = document.getElementById('patchList');
+  el.innerHTML = '';
+  if(!j.ok) return;
+  j.patches.forEach(p=>{
+    const div = document.createElement('div'); div.className='patch-item';
+    const left = document.createElement('div'); left.textContent = `${p.id} → ${p.target} (${p.applied ? 'APPLIED' : 'PENDING'})\n${p.comment || ''}`;
+    const right = document.createElement('div');
+    const view = document.createElement('button'); view.textContent='View'; view.onclick = ()=> viewPatch(p.id);
+    const apply = document.createElement('button'); apply.textContent='Apply'; apply.onclick = ()=> applyPatch(p.id);
+    right.appendChild(view); right.appendChild(apply);
+    div.appendChild(left); div.appendChild(right);
+    el.appendChild(div);
+  });
+}
+
+async function viewPatch(id){
+  const j = await api('/api/patch/view/' + id);
+  if(!j.ok) return alert('err: '+JSON.stringify(j));
+  const p = j.patch;
+  alert(`PATCH ${p.id} → ${p.target}\n\n--- ORIGINAL ---\n${p.original || '(file missing)'}\n\n--- PROPOSED ---\n${p.newContent}\n\n--- COMMENT ---\n${p.comment || ''}`);
+}
+
+async function applyPatch(id){
+  if(!confirm('Apply patch ' + id + '? This will write files on disk and create a backup.')) return;
+  const r = await fetch('/api/patch/apply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, applier: 'web-ui' }) });
+  const j = await r.json();
+  alert(JSON.stringify(j));
+  loadPatches(); loadFiles();
+}
+
+loadFiles();
+</script>
+</body>
+</html>
